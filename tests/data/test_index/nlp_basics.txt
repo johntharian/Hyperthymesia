@@ -1,0 +1,1 @@
+Natural language processing enables computers to understand human language. Transformers and BERT are revolutionary NLP models.

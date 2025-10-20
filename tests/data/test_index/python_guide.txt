@@ -1,0 +1,1 @@
+Python is a versatile programming language. It's widely used for data science, web development, and automation tasks.

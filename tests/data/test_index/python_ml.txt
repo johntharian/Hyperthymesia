@@ -1,0 +1,1 @@
+Python programming is essential for machine learning projects. Libraries like TensorFlow and PyTorch are built with Python.

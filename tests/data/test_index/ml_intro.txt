@@ -1,0 +1,1 @@
+Machine learning is a subset of artificial intelligence. Neural networks and deep learning are powerful techniques used in AI applications.
