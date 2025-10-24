@@ -3,7 +3,7 @@ Main CLI entry point for SearchAll application.
 """
 
 import click
-from cli.commands import index, search
+from cli.commands import index, search, ask
 
 
 @click.group()
@@ -22,7 +22,7 @@ def cli(ctx):
 # Add command groups
 cli.add_command(index)
 cli.add_command(search)
-
+cli.add_command(ask)
 
 if __name__ == "__main__":
     cli()

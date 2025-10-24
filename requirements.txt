@@ -7,3 +7,11 @@ python-docx>=0.8.11
 platformdirs>=3.0.0
 tqdm>=4.65.0
 PyPDF2>=3.0.0
+google-generativeai>=0.1.0
+openai>=1.0.0
+anthropic>=0.1.0
+requests>=2.31.0
+
+llama-cpp-python>=0.2.0
+
+mlx-lm>=0.1.0

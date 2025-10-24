@@ -5,7 +5,6 @@ import click
 from pathlib import Path
 from cli.formatters import print_success, print_error, print_info, print_results, format_size
 from core.indexer import Indexer
-from core.search import Searcher
 from storage.db import Database
 
 
@@ -41,7 +40,9 @@ def index():
 @click.option('--name', '-n', help='Optional name for this indexed location')
 @click.option('--recursive/--no-recursive', '-r/-R', default=True, 
               help='Recursively index subdirectories')
-def index_add(path, name, recursive):
+@click.option('--include-deps-docs', is_flag=True,
+              help='Include documentation from dependencies (node_modules, venv, etc.)')
+def index_add(path, name, recursive, include_deps_docs):
     """
     Add a folder or file to the index.
     
@@ -50,10 +51,15 @@ def index_add(path, name, recursive):
     abs_path = Path(path).resolve()
     
     print_info(f"Indexing: {abs_path}")
-    print_info(f"Recursive: {recursive}\n")
+    print_info(f"Recursive: {recursive}")
+    if include_deps_docs:
+        print_info("Including documentation from dependencies")
+    print()
     
     try:
         indexer = get_indexer()
+        # Pass the include_deps_docs flag through indexer options
+        # (We'll need to update indexer.index_path to accept this)
         stats = indexer.index_path(str(abs_path), recursive=recursive, name=name)
         
         print()  # New line after progress bar
@@ -138,7 +144,8 @@ def index_refresh(path):
 
 
 @index.command('stats')
-def index_stats():
+@click.option('--detailed', '-d', is_flag=True, help='Show detailed breakdown by file type')
+def index_stats(detailed):
     """Show statistics about the indexed data."""
     try:
         indexer = get_indexer()
@@ -150,6 +157,31 @@ def index_stats():
         print(f"  Total size: {format_size(stats['total_size'])}")
         print(f"  Vector embeddings: {stats['vector_count']}")
         
+        if detailed:
+            # Show breakdown by file type
+            db = get_db()
+            cursor = db.conn.cursor()
+            
+            cursor.execute("""
+                SELECT 
+                    file_type,
+                    COUNT(*) as count,
+                    SUM(size) as total_size
+                FROM documents
+                GROUP BY file_type
+                ORDER BY count DESC
+                LIMIT 20
+            """)
+            
+            results = cursor.fetchall()
+            if results:
+                print("\n  Breakdown by file type:")
+                for row in results:
+                    file_type = row['file_type'] or 'unknown'
+                    count = row['count']
+                    size = format_size(row['total_size'])
+                    print(f"    {file_type:15} {count:6} files  {size}")
+        
     except Exception as e:
         print_error(f"Error fetching stats: {e}")
 
@@ -159,15 +191,24 @@ def index_stats():
 @click.option('--limit', '-l', default=10, help='Maximum number of results')
 @click.option('--file-type', '-t', help='Filter by file type (e.g., pdf, txt)')
 @click.option('--path', '-p', type=click.Path(), help='Search only in specific path')
-@click.option('--keyword-weight', default=0.5, help='Weight for keyword search (0-1)')
-@click.option('--semantic-weight', default=0.5, help='Weight for semantic search (0-1)')
-@click.option('--min-score', default=0.01, help='Minimum score threshold')
-def search(query, limit, file_type, path, keyword_weight, semantic_weight, min_score):
+@click.option('--include-deps', is_flag=True, 
+              help='Include results from dependencies (node_modules, venv, etc.)')
+@click.option('--force-llm', is_flag=True, help='Force LLM usage even for simple queries')
+@click.option('--no-llm', is_flag=True, help='Disable LLM, use only direct search')
+@click.option('--llm-provider', default='gemini', 
+              type=click.Choice(['gemini', 'openai', 'anthropic']),
+              help='LLM provider to use (default: gemini)')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed search strategy info')
+def search(query, limit, file_type, path, include_deps, force_llm, no_llm, llm_provider, verbose):
     """
-    Search indexed files using hybrid search (keyword + semantic).
+    Search indexed files using intelligent hybrid search.
+    
+    Automatically uses LLM to optimize complex queries like questions
+    or conversational searches. Simple keyword searches use fast direct search.
     
     QUERY: The search terms (can be multiple words)
     """
+    from core.intelligent_searcher import IntelligentSearcher
     
     query_string = ' '.join(query)
     
@@ -176,19 +217,53 @@ def search(query, limit, file_type, path, keyword_weight, semantic_weight, min_s
         print_info(f"   File type filter: {file_type}")
     if path:
         print_info(f"   Path filter: {path}")
+    if include_deps:
+        print_info(f"   Including dependencies")
     print()
     
     try:
-        searcher = Searcher()
-        results = searcher.search(
+        # Check for database migration
+        from utils.migration import needs_migration, migrate_for_filename_search
+        from storage.db import Database
+        
+        db = Database()
+        if needs_migration(db):
+            migrate_for_filename_search(db)
+        
+        # Initialize intelligent searcher
+        use_llm = not no_llm
+        searcher = IntelligentSearcher(use_llm=use_llm)
+        
+        # Check if LLM is available
+        if use_llm and not searcher.is_llm_available():
+            print_info(f"ℹ️  LLM features not available (set {llm_provider.upper()}_API_KEY to enable)")
+            print_info("   Using direct search mode\n")
+        
+        # Perform intelligent search
+        response = searcher.search(
             query=query_string,
             limit=limit,
             file_type=file_type,
             path_filter=path,
-            keyword_weight=keyword_weight,
-            semantic_weight=semantic_weight,
-            min_score=min_score
+            force_llm=force_llm,
+            verbose=verbose
         )
+        
+        results = response['results']
+        
+        # Filter out dependencies if not requested
+        if not include_deps:
+            dep_dirs = {'node_modules', '__pycache__', '.venv', 'venv', 'env', 'site-packages', 'vendor'}
+            original_count = len(results)
+            results = [r for r in results if not any(dep in r['path'] for dep in dep_dirs)]
+            
+            if original_count > len(results):
+                excluded = original_count - len(results)
+                print_info(f"ℹ️  Excluded {excluded} results from dependencies. Use --include-deps to see them.\n")
+        
+        # Show if query was rewritten
+        if response['used_llm'] and response['rewritten_query']:
+            print_info(f"💡 Optimized to: '{response['rewritten_query']}'\n")
         
         if not results:
             print_info("❌ No good matches found for your query.")
@@ -197,7 +272,8 @@ def search(query, limit, file_type, path, keyword_weight, semantic_weight, min_s
             print("  • Try different or more general keywords")
             print("  • Check your spelling")
             print("  • Make sure relevant files are indexed")
-            print("  • Lower the minimum score threshold with --min-score")
+            if not include_deps:
+                print("  • Use --include-deps to search in dependencies")
             print()
             print_info("ℹ️  Use 'hyperthymesia index add <path>' to index more files")
         else:
@@ -207,3 +283,122 @@ def search(query, limit, file_type, path, keyword_weight, semantic_weight, min_s
         print_error(f"Error searching: {e}")
         import traceback
         traceback.print_exc()
+
+
+@click.command()
+@click.argument('question', nargs=-1, required=True)
+@click.option('--use-cloud', is_flag=False, 
+              help='Use cloud LLM (requires API key) instead of local')
+@click.option('--provider', default='gemini',
+              type=click.Choice(['openai', 'anthropic', 'gemini']),
+              help='Cloud provider if using --use-cloud')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed process')
+def ask(question, use_cloud, provider, verbose):
+    """
+    Ask a question about your indexed documents.
+    
+    Uses RAG (Retrieval Augmented Generation) to answer questions based on
+    your documents. Runs locally by default, or use --use-cloud for better quality.
+    
+    QUESTION: Your question (can be multiple words)
+    
+    Examples:
+      hyperthymesia ask "how did I implement authentication?"
+      hyperthymesia ask "what does the config file say about database?"
+      hyperthymesia ask "explain the main algorithm" --use-cloud
+    """
+    from core.rag_retriever import RAGRetriever
+    from core.local_llm import LocalLLM, CloudLLM
+    
+    question_string = ' '.join(question)
+    
+    print_info(f"💭 Question: {question_string}\n")
+    
+    try:
+        # Initialize retriever
+        if verbose:
+            print_info("📚 Searching for relevant documents...")
+        
+        retriever = RAGRetriever()
+        
+        # Retrieve context
+        result = retriever.retrieve_context(question_string, num_chunks=5)
+        
+        if not result['context']:
+            print_info("❌ No relevant documents found for your question.")
+            print()
+            print_info("💡 Tips:")
+            print("  • Make sure relevant files are indexed")
+            print("  • Try rephrasing your question")
+            print("  • Use more specific keywords")
+            print()
+            print_info("ℹ️  Index more files with: hyperthymesia index add <path>")
+            return
+        
+        if verbose:
+            print_success(f"✓ Found {result['chunks_used']} relevant chunks")
+            print_info(f"   Context size: ~{len(result['context'])} characters\n")
+        
+        # Initialize LLM
+        if use_cloud:
+            if verbose:
+                print_info(f"🌐 Using {provider} API...")
+            
+            try:
+                llm = CloudLLM(provider=provider)
+            except ValueError as e:
+                print_error(f"\n❌ {e}")
+                print_info(f"   Set {provider.upper()}_API_KEY environment variable")
+                print_info(f"   Example: export {provider.upper()}_API_KEY='your-key'")
+                return
+        else:
+            if verbose:
+                print_info("🤖 Using local LLM...")
+            
+            llm = LocalLLM()
+            
+            if not llm.is_available():
+                print_error("\n❌ No local LLM available.")
+                print()
+                print_info("Install Ollama (easiest): https://ollama.ai")
+                print("  Then run: ollama pull llama3.2:3b")
+                print()
+                print_info("Or use cloud: --use-cloud")
+                return
+        
+        # Generate answer
+        if verbose:
+            print_info("⏳ Generating answer...\n")
+        else:
+            print_info("⏳ Thinking...\n")
+        
+        answer = llm.answer_question(
+            question_string,
+            result['context'],
+            max_tokens=500
+        )
+        
+        # Display answer
+        print_success("🤖 Answer:\n")
+        print(answer)
+        print()
+        
+        # Display sources
+        if result['sources']:
+            print_info("📄 Sources:\n")
+            for i, source in enumerate(result['sources'], 1):
+                print(f"  {i}. {source['file']}")
+                print(f"     {source['path']}")
+                print()
+        
+        # Show backend info if verbose
+        if verbose:
+            if hasattr(llm, 'get_backend_info'):
+                info = llm.get_backend_info()
+                print_info(f"Backend: {info['backend']}")
+        
+    except Exception as e:
+        print_error(f"Error answering question: {e}")
+        import traceback
+        if verbose:
+            traceback.print_exc()

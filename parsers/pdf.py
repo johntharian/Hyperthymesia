@@ -19,18 +19,21 @@ def parse(file_path: Path) -> Optional[str]:
     try:
         with open(file_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
-            
+            print("pdf_reader", pdf_reader)
             # Extract text from all pages
             text_parts = []
             for page_num in range(len(pdf_reader.pages)):
+                print("page_num", page_num)
                 page = pdf_reader.pages[page_num]
+                print("page", page)
                 text = page.extract_text()
+                print("text", text)
                 if text:
                     text_parts.append(text)
             
             # Combine all pages
             full_text = '\n\n'.join(text_parts)
-            
+            print("full_text", full_text)
             # Return None if no text extracted
             if not full_text.strip():
                 print(f"Warning: No text extracted from {file_path} (might be image-based PDF)")
