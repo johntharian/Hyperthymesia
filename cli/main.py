@@ -19,6 +19,13 @@ def cli(ctx):
     ctx.ensure_object(dict)
 
 
+# Add shell command
+@cli.command()
+def shell():
+    """Start interactive shell (models stay loaded)."""
+    from cli.repl import start_repl
+    start_repl()
+
 # Add command groups
 cli.add_command(index)
 cli.add_command(search)

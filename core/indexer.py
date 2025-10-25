@@ -9,6 +9,7 @@ from typing import Callable, List, Optional
 from parsers import code as code_parser
 from parsers import pdf as pdf_parser
 from parsers import text as text_parser
+from utils.gitignore import GitignoreFilter 
 from storage.db import Database
 from storage.vector_store import VectorStore
 from tqdm import tqdm
@@ -65,7 +66,17 @@ class Indexer:
             files = [path_obj]
         else:
             pattern = "**/*" if recursive else "*"
-            files = [f for f in path_obj.glob(pattern) if f.is_file()]
+            all_files = [f for f in path_obj.glob(pattern) if f.is_file()]
+
+            # Apply gitignore filtering
+            gitignore = GitignoreFilter(path_obj)
+            files = gitignore.filter_files(all_files)
+
+            ignored_count = len(all_files) - len(files)
+            
+            if ignored_count > 0:
+                print(f"Filtered out {ignored_count} files (build artifacts, dependencies, etc.)")
+
 
         # Filter to only supported files
         supported_files = [f for f in files if self._is_supported(f)]

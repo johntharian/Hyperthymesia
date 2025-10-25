@@ -9,6 +9,17 @@ from core.chunker import DocumentChunker
 from storage.db import Database
 from storage.vector_store import VectorStore
 
+# Dependency directories to filter out
+DEPENDENCY_DIRS = {
+    'node_modules', 
+    '__pycache__', 
+    '.venv', 
+    'venv', 
+    'env', 
+    'site-packages', 
+    'vendor',
+    'packages'
+}
 
 class RAGRetriever:
     """
@@ -21,7 +32,8 @@ class RAGRetriever:
     """
 
     def __init__(
-        self, db: Optional[Database] = None, vector_store: Optional[VectorStore] = None
+        self, db: Optional[Database] = None, vector_store: Optional[VectorStore] = None,
+        searcher: Optional[IntelligentSearcher] = None
     ):
         """
         Initialize RAG retriever.
@@ -29,9 +41,11 @@ class RAGRetriever:
         Args:
             db: Database instance
             vector_store: Vector store instance
+            searcher: IntelligentSearcher instance
         """
         self.db = db or Database()
         self.vector_store = vector_store or VectorStore()
+        self.searcher = searcher or IntelligentSearcher()
         self.chunker = DocumentChunker()
 
     def retrieve_context(
@@ -48,11 +62,49 @@ class RAGRetriever:
         Returns:
             Dictionary with context and source information
         """
-        # 1. Search for relevant documents
-        semantic_results = self.vector_store.search(question, limit=num_chunks * 2)
-        keyword_results = self.db.search_keyword(question, limit=num_chunks * 2)
+    
+        # 1. Extract key terms (simple, no LLM)
+        key_terms = self._extract_key_terms(question)
 
-        # 2. Merge and deduplicate results
+        #  2. Semantic search (embeddings understand questions)
+        semantic_results = self.vector_store.search(
+            question,  # Use full question for semantic
+            limit=num_chunks * 3
+        )
+        
+        # 3. Keyword search with extracted terms
+        keyword_results = self.db.search_keyword(
+            key_terms,  # Use extracted terms for keyword
+            limit=num_chunks * 2
+        )
+
+        # def is_user_code(result):
+        #     """Check if result is from user code (not dependencies)."""
+        #     # For semantic results
+        #     if 'metadata' in result:
+        #         path = result.get('metadata', {}).get('path', '')
+        #     else:
+        #         # For keyword results
+        #         path = result.get('path', '')
+        
+        #     return not any(dep in path for dep in DEPENDENCY_DIRS)
+
+        # # Filter both result sets
+        # semantic_results = [r for r in semantic_results if is_user_code(r)]
+        # keyword_results = [r for r in keyword_results if is_user_code(r)]
+
+        # # 3. BOOST USER CODE (in case some deps slip through)
+        # for result in semantic_results:
+        #     # User code gets 2x score boost
+        #     if 'score' in result:
+        #         result['score'] *= 2.0
+    
+        # for result in keyword_results:
+        #     if 'score' in result:
+        #         result['score'] *= 2.0
+
+
+        # 4. Merge and deduplicate results
         all_doc_ids = set()
         for r in semantic_results:
             all_doc_ids.add(r["id"])
@@ -62,7 +114,7 @@ class RAGRetriever:
         if not all_doc_ids:
             return {"context": "", "sources": [], "chunks_used": 0}
 
-        # 3. Get full document content and chunk
+        # 5. Get full document content and chunk
         chunks = []
         sources = []
 
@@ -113,6 +165,46 @@ class RAGRetriever:
             "sources": sources[: len(chunks)],
             "chunks_used": len(chunks),
         }
+
+    def _extract_key_terms(self, question: str) -> str:
+        """Simple keyword extraction without LLM."""
+        stop_words = {
+            "how",
+            "what",
+            "where",
+            "when",
+            "why",
+            "who",
+            "which",
+            "does",
+            "do",
+            "did",
+            "is",
+            "are",
+            "was",
+            "were",
+            "the",
+            "a",
+            "an",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "we",
+            "i",
+            "you",
+            "it",
+            "this",
+            "that",
+            "use",
+        }
+
+        words = question.lower().split()
+        key_terms = [w for w in words if w not in stop_words and len(w) > 2]
+
+        return " ".join(key_terms)
 
     def _find_best_chunk(self, question: str, chunks: List[Dict]) -> Optional[Dict]:
         """
