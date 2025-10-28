@@ -169,7 +169,7 @@ Answer:"""
                         'temperature': 0.7
                     }
                 },
-                timeout=60
+                timeout=300
             )
             
             if response.status_code == 200:

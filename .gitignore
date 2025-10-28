@@ -3,3 +3,13 @@ client_secret_802737267375-9nmqa2tftr05koivc04i3786pn8vf8d5.apps.googleuserconte
 __pycache__
 *.pyc
 .env
+
+# Real codebase testing - downloaded projects (too large for repo)
+tests/data/codebases/
+
+# Database testing
+tests/data/*.db
+tests/.pytest_cache
+
+# Logs
+*.log

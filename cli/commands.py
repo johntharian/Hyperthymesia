@@ -402,3 +402,90 @@ def ask(question, use_cloud, provider, verbose):
         import traceback
         if verbose:
             traceback.print_exc()
+
+
+@click.command()
+@click.argument('query', nargs=-1, required=True)
+@click.option('--verbose', '-v', is_flag=True, help='Show agent reasoning steps')
+def agent(query, verbose):
+    """
+    Ask a question using intelligent agentic reasoning.
+
+    The agent uses local LLM to:
+    1. Understand your question
+    2. Reason about what to do
+    3. Plan and execute tools
+    4. Synthesize comprehensive answers
+
+    For complex questions, this provides more intelligent results than simple search.
+    For simple queries, it automatically falls back to fast direct search.
+
+    QUERY: Your question (can be multiple words)
+
+    Examples:
+      hyperthymesia agent "how do retries work?"
+      hyperthymesia agent "where is error handling used?" --verbose
+      hyperthymesia agent "explain the authentication flow"
+    """
+    from core.agent import HyperthymesiaAgent
+
+    query_string = ' '.join(query)
+
+    print_info(f"🤖 Agent Mode: {query_string}\n")
+
+    try:
+        # Initialize agent
+        agent_instance = HyperthymesiaAgent()
+
+        # Process query
+        response = agent_instance.process_query(query_string, verbose=verbose)
+
+        if not response.success:
+            print_error(f"❌ {response.answer}")
+            print()
+            print_info("ℹ️  Make sure files are indexed: hyperthymesia index add <path>")
+            return
+
+        # Display answer
+        print_success("✨ Agent Analysis:\n")
+        print(response.answer)
+        print()
+
+        # Display detailed explanation if available
+        if response.detailed_explanation:
+            print_success("📚 Detailed Explanation:\n")
+            print(response.detailed_explanation)
+            print()
+
+        # Display sources
+        all_sources = set(response.sources or [])
+        if response.explanation_sources:
+            all_sources.update(response.explanation_sources)
+
+        if all_sources:
+            print_info("📄 Sources:\n")
+            for i, source in enumerate(sorted(all_sources), 1):
+                print(f"  {i}. {source}")
+            print()
+
+        # Show reasoning if verbose
+        if verbose and response.reasoning_chain:
+            print_info("💭 Reasoning Chain:\n")
+            print(response.reasoning_chain)
+            print()
+
+            if response.steps:
+                print_info("📋 Execution Steps:\n")
+                for step in response.steps:
+                    if step.action:
+                        print(f"  Step {step.step_num}: {step.action.tool_name}")
+                        print(f"    └─ {step.action.reasoning}")
+                        if step.result:
+                            print(f"    └─ {step.result.message}")
+                print()
+
+    except Exception as e:
+        print_error(f"Error in agent processing: {e}")
+        import traceback
+        if verbose:
+            traceback.print_exc()

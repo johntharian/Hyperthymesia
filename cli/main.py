@@ -3,7 +3,7 @@ Main CLI entry point for SearchAll application.
 """
 
 import click
-from cli.commands import index, search, ask
+from cli.commands import index, search, ask, agent
 
 
 @click.group()
@@ -30,6 +30,7 @@ def shell():
 cli.add_command(index)
 cli.add_command(search)
 cli.add_command(ask)
+cli.add_command(agent)
 
 if __name__ == "__main__":
     cli()
