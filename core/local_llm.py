@@ -130,21 +130,27 @@ class LocalLLM:
     
     def _build_prompt(self, question: str, context: str) -> str:
         """
-        Build prompt for Q&A.
-        
-        Uses a structured format that works well with Llama models.
-        """
-        prompt = f"""You are a helpful assistant that answers questions based on provided context.
+        Build prompt for developer Q&A.
 
-Context from user's documents:
+        Optimized for answering code-related questions with focus on implementation details.
+        """
+        prompt = f"""You are an expert code assistant helping a developer understand their codebase.
+
+Retrieved code context:
 {context}
 
-Question: {question}
+Developer's question: {question}
 
-Answer the question based on the context above. Be concise and specific. If the context doesn't contain enough information, say so.
+Guidelines:
+• Answer based ONLY on the provided code context
+• Be specific about class names, function names, and file locations
+• Explain the implementation, not just what it does
+• If code examples are shown, reference them directly
+• If the context doesn't have the answer, clearly state that
+• Keep answers concise but complete (2-4 sentences)
 
 Answer:"""
-        
+
         return prompt
     
     def _generate_ollama(self, prompt: str, max_tokens: int) -> str:

@@ -4,26 +4,28 @@ Hybrid search implementation using RRF (Reciprocal Rank Fusion).
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from core.query_expander import QueryExpander
 from storage.db import Database
 from storage.vector_store import VectorStore
 
 
 class Searcher:
     """Handles hybrid search combining keyword and semantic search."""
-    
-    def __init__(self, db: Optional[Database] = None, 
+
+    def __init__(self, db: Optional[Database] = None,
                  vector_store: Optional[VectorStore] = None):
         """
         Initialize searcher.
-        
+
         Args:
             db: Database instance for keyword search
             vector_store: VectorStore instance for semantic search
         """
         self.db = db or Database()
         self.vector_store = vector_store or VectorStore()
+        self.query_expander = QueryExpander()
     
-    def search(self, query: str, limit: int = 10, 
+    def search(self, query: str, limit: int = 10,
                file_type: Optional[str] = None,
                path_filter: Optional[str] = None,
                keyword_weight: float = 0.5,
@@ -31,7 +33,9 @@ class Searcher:
                min_score: float = 0.00) -> List[Dict]:
         """
         Hybrid search using RRF to combine keyword and semantic search.
-        
+
+        Uses query expander for abstract queries to improve results.
+
         Args:
             query: Search query
             limit: Maximum results to return
@@ -40,16 +44,21 @@ class Searcher:
             keyword_weight: Weight for keyword search (0-1)
             semantic_weight: Weight for semantic search (0-1)
             min_score: Minimum RRF score threshold for results
-        
+
         Returns:
             List of search results with scores and metadata
         """
+        # Expand abstract queries to improve search results
+        search_query = query
+        if self.query_expander.is_abstract_query(query):
+            search_query = self.query_expander.expand_query(query)
+
         # Fetch more results than needed for better fusion
         fetch_limit = min(limit * 5, 100)
-        
+
         # Perform both searches
-        keyword_results = self._keyword_search(query, fetch_limit)
-        semantic_results = self._semantic_search(query, fetch_limit, file_type, path_filter)
+        keyword_results = self._keyword_search(search_query, fetch_limit)
+        semantic_results = self._semantic_search(search_query, fetch_limit, file_type, path_filter)
         
         # If both searches returned nothing, return empty
         if not keyword_results and not semantic_results:
@@ -232,19 +241,19 @@ class Searcher:
     def _enrich_results(self, results: List[Dict], query: str) -> List[Dict]:
         """
         Enrich results with full metadata and snippets.
-        
+
         Args:
             results: Fused search results
             query: Original search query for snippet generation
-        
+
         Returns:
             Enriched results with metadata
         """
         enriched = []
-        
+
         for result in results:
             doc_id = result['id']
-            
+
             # Get document metadata from DB
             cursor = self.db.conn.cursor()
             cursor.execute("""
@@ -252,15 +261,20 @@ class Searcher:
                 FROM documents d
                 WHERE d.id = ?
             """, (doc_id,))
-            
+
             row = cursor.fetchone()
             if not row:
                 continue
-            
+
             # Get content snippet
             content = self.db.get_document_content(doc_id)
             snippet = self._generate_snippet(content, query) if content else ""
-            
+
+            # Calculate filename boost
+            final_score = result['final_score']
+            filename_boost = self._calculate_filename_boost(row['filename'], query)
+            final_score = final_score * (1 + filename_boost)
+
             enriched.append({
                 'id': doc_id,
                 'path': row['path'],
@@ -268,11 +282,11 @@ class Searcher:
                 'file_type': row['file_type'],
                 'size': row['size'],
                 'modified': row['modified_at'],
-                'score': result['final_score'],
+                'score': final_score,
                 'snippet': snippet,
                 'matched_in': self._get_match_source(result)
             })
-        
+
         return enriched
     
     def _generate_snippet(self, content: str, query: str, 
@@ -320,7 +334,55 @@ class Searcher:
             snippet = snippet + "..."
         
         return snippet.strip()
-    
+
+    def _calculate_filename_boost(self, filename: str, query: str) -> float:
+        """
+        Calculate a boost factor based on filename match quality.
+
+        Boosts scoring when query terms match the filename:
+        - Exact filename match: 1.0x (100% boost)
+        - Partial filename match: 0.5x (50% boost)
+        - Extension match (e.g., .py, .js): 0.1x (10% boost)
+        - No filename match: 0.0x (no boost)
+
+        Args:
+            filename: The document filename
+            query: The search query
+
+        Returns:
+            Boost multiplier (0.0 to 1.0)
+        """
+        import os
+
+        filename_lower = filename.lower()
+        query_lower = query.lower()
+
+        # Check for exact filename match (case-insensitive)
+        if filename_lower == query_lower or filename_lower == query_lower + os.path.splitext(filename)[1]:
+            return 1.0
+
+        # Check if filename contains all query terms (phrase match)
+        query_words = query_lower.split()
+        if all(word in filename_lower for word in query_words):
+            return 0.8
+
+        # Check for partial filename match (at least one significant word)
+        for word in query_words:
+            if len(word) > 2 and word in filename_lower:  # Ignore short words like "a", "to", etc.
+                return 0.5
+
+        # Check if query contains filename or vice versa
+        if query_lower in filename_lower or filename_lower in query_lower:
+            return 0.3
+
+        # Check file extension match
+        file_ext = os.path.splitext(filename)[1].lower()
+        if file_ext and file_ext[1:] in query_lower:  # Remove the leading dot
+            return 0.1
+
+        # No filename match
+        return 0.0
+
     def _get_match_source(self, result: Dict) -> str:
         """
         Determine which search method(s) found this result.

@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import platformdirs
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Database:
@@ -268,15 +271,37 @@ class Database:
     def get_document_content(self, doc_id: int) -> Optional[str]:
         """Get the full content of a document by ID."""
         cursor = self.conn.cursor()
+        
+        # First try to get the document path
         cursor.execute(
             """
-            SELECT content FROM documents_fts WHERE document_id = ?
-        """,
+            SELECT path FROM documents WHERE id = ?
+            """,
             (doc_id,),
         )
-
+        
         result = cursor.fetchone()
-        return result[0] if result else None
+        if not result:
+            logger.debug(f"No document found with ID: {doc_id}")
+            return None
+            
+        doc_path = result[0]
+
+        try:
+            # Try to read the file directly
+            with open(doc_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            logger.warning(f"Error reading file {doc_path}: {str(e)}")
+            # Fallback to FTS content if file reading fails
+            cursor.execute(
+                """
+                SELECT content FROM documents_fts WHERE document_id = ?
+                """,
+                (doc_id,),
+            )
+            result = cursor.fetchone()
+            return result[0] if result else None
 
     def get_stats(self) -> Dict:
         """Get overall database statistics."""
