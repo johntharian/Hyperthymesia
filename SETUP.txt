@@ -1,0 +1,210 @@
+============================================================
+HYPERTHYMESIA - SETUP GUIDE
+============================================================
+
+Hyperthymesia is a local-first, privacy-focused AI search and code assistant.
+This guide will help you get started with multi-backend LLM support.
+
+============================================================
+QUICK START
+============================================================
+
+1. Install Hyperthymesia:
+   pip install -e .
+
+2. Index your code:
+   hyperthymesia index add /path/to/your/code
+
+3. Ask a question:
+   hyperthymesia agent "how does authentication work?"
+
+============================================================
+LLM BACKEND OPTIONS
+============================================================
+
+Hyperthymesia supports three LLM backends. It will auto-detect
+and use the first available backend in this order:
+
+1. Ollama (easiest, recommended)
+2. llama-cpp-python (cross-platform)
+3. MLX (Mac/Apple Silicon only)
+
+============================================================
+OPTION 1: OLLAMA (RECOMMENDED - EASIEST)
+============================================================
+
+Ollama is the easiest option. It runs as a service and
+handles model management automatically.
+
+Step 1: Install Ollama
+  - Download from: https://ollama.ai
+  - Follow the installer for your OS (Mac, Linux, Windows)
+  - Ollama will run in the background
+
+Step 2: Pull the model we're using
+  ollama pull llama3.2:3b
+
+Step 3: Start Ollama service
+  ollama serve
+
+Step 4: In another terminal, use Hyperthymesia
+  hyperthymesia agent "your question"
+
+The agent will automatically detect and use Ollama.
+
+Model Details:
+  - Model: llama3.2:3b
+  - Size: ~2GB
+  - Speed: Fast
+  - Quality: Good for code understanding
+
+============================================================
+OPTION 2: LLAMA-CPP-PYTHON (CROSS-PLATFORM)
+============================================================
+
+llama-cpp-python allows you to run quantized models locally
+without a service. Works on Mac, Linux, and Windows.
+
+Step 1: Install llama-cpp-python
+  pip install llama-cpp-python
+
+Step 2: Models will auto-download on first use
+  hyperthymesia agent "your question"
+
+  When prompted:
+    Would you like to download a model? (y/n) y
+
+  The system will suggest and download mistral-7b-instruct
+  (takes a few minutes, ~4.37GB)
+
+Or manually download a model:
+
+Step 3A: Manual download (if auto-download fails)
+  Create directory:
+    mkdir -p ~/.hyperthymesia/models/
+
+  Download a GGUF model from HuggingFace:
+    - Mistral 7B Instruct (recommended): 4.37GB
+      https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF
+
+    - Neural Chat 7B: 4.29GB
+      https://huggingface.co/TheBloke/neural-chat-7B-v3-3-GGUF
+
+    - OpenChat 3.5: 4.16GB
+      https://huggingface.co/TheBloke/OpenChat-3.5-GGUF
+
+  Download command example:
+    wget -O ~/.hyperthymesia/models/mistral-7b.gguf \
+      "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/Mistral-7B-Instruct-v0.2.Q4_K_M.gguf"
+
+Step 4: Use Hyperthymesia
+  hyperthymesia agent "your question"
+
+  The system will auto-detect the model in ~/.hyperthymesia/models/
+
+Model Details:
+  - Format: GGUF (quantized)
+  - Size: ~4GB
+  - Speed: Moderate (CPU) to Fast (GPU with acceleration)
+  - Quality: Good for code understanding
+  - GPU Support: Yes (via llama-cpp-python)
+
+============================================================
+OPTION 3: MLX (MAC/APPLE SILICON ONLY)
+============================================================
+
+MLX is optimized for Apple Silicon Macs but can be finicky
+with model selection. Recommended only if Ollama/llama-cpp
+don't work for you.
+
+Step 1: Install mlx-lm
+  pip install mlx-lm
+
+Step 2: Use Hyperthymesia
+  hyperthymesia agent "your question"
+
+  MLX will auto-download a model on first use (takes time).
+
+Model Details:
+  - Automatically selects working model from mlx-community
+  - Size: ~4GB
+  - Speed: Fast (optimized for Apple Silicon)
+  - Quality: Good
+
+Troubleshooting:
+  If MLX fails with model errors, use Ollama or llama-cpp instead.
+
+============================================================
+WHICH ONE TO CHOOSE?
+============================================================
+
+Choose Ollama if:
+  ✓ You want the easiest setup
+  ✓ You don't want to worry about model management
+  ✓ You want a background service
+  ✓ You use Mac, Linux, or Windows
+
+Choose llama-cpp-python if:
+  ✓ You want to run models without a service
+  ✓ You want GPU acceleration (on some systems)
+  ✓ You already have downloaded GGUF models
+  ✓ Cross-platform without service overhead
+
+Choose MLX if:
+  ✓ You have Apple Silicon (M1/M2/M3 Mac)
+  ✓ You want maximum performance on Mac
+  ✓ Other backends don't work for you
+
+============================================================
+INSTALLATION VERIFICATION
+============================================================
+
+To verify your setup:
+
+1. Check which backends are available:
+   python -c "from core.local_llm import LocalLLM; \
+              llm = LocalLLM(); \
+              print(f'Backend: {llm.backend}')"
+
+2. Try a simple query:
+   hyperthymesia agent "hello"
+
+3. If it works:
+   ✓ Agent Analysis will show a response
+   ✓ Detailed Explanation will provide context
+   ✓ Sources will list relevant files
+
+============================================================
+TROUBLESHOOTING
+============================================================
+
+Issue: "No local LLM backend available"
+  Solution: Install Ollama, llama-cpp-python, or mlx-lm
+
+Issue: Ollama: "Connection refused"
+  Solution: Make sure ollama serve is running in another terminal
+
+Issue: llama-cpp-python: "Model not found"
+  Solution: Download a model to ~/.hyperthymesia/models/
+
+Issue: MLX: "Repository Not Found"
+  Solution: Use Ollama or llama-cpp-python instead
+
+Issue: "HTTP Error 404" during model download
+  Solution: Check your internet connection or use manual download
+
+============================================================
+NEXT STEPS
+============================================================
+
+1. Choose your LLM backend above and install it
+2. Run: hyperthymesia agent "how does search work?"
+3. Index more code: hyperthymesia index add /path/to/project
+4. Try complex queries: hyperthymesia agent "your question" --verbose
+
+For more information:
+  - AGENT_ARCHITECTURE.md - Technical design
+  - AGENT_CLI_USAGE.md - User guide with examples
+  - AGENT_WITH_RAG_FEATURE.md - RAG enhancement details
+
+============================================================

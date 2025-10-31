@@ -222,7 +222,7 @@ Think step by step:
 Reasoning:"""
 
         try:
-            response = self.llm._generate_ollama(prompt, max_tokens=self.max_tokens_per_step)
+            response = self.llm.generate(prompt, max_tokens=self.max_tokens_per_step)
             return response.strip()
         except:
             return self._simple_reasoning(query, analysis)
@@ -258,7 +258,7 @@ Create a step-by-step action plan using these tools:
 Plan (numbered steps, one per line):"""
 
         try:
-            response = self.llm._generate_ollama(prompt, max_tokens=self.max_tokens_per_step)
+            response = self.llm.generate(prompt, max_tokens=self.max_tokens_per_step)
             return response.strip()
         except:
             return "1. search(query)\n2. synthesize(results)"
@@ -474,7 +474,7 @@ Instructions:
 Answer:"""
 
         try:
-            explanation = self.llm._generate_ollama(prompt, max_tokens=800)
+            explanation = self.llm.generate(prompt, max_tokens=800)
             return explanation.strip()
         except Exception as e:
             self.logger.error(f"LLM explanation generation failed: {e}")
