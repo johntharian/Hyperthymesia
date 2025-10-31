@@ -60,11 +60,6 @@ Visit [ollama.ai](https://ollama.ai) and download Ollama for your operating syst
 
 Open a terminal and run:
 ```bash
-ollama pull llama2
-```
-
-Or for a smaller, faster model:
-```bash
 ollama pull llama3.2:3b
 ```
 
