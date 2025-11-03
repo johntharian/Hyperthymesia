@@ -2,12 +2,13 @@
 Model manager for automatic LLM model downloading and caching.
 Supports downloading GGUF models for llama-cpp-python and MLX.
 """
-import os
-import urllib.request
-import urllib.error
-from pathlib import Path
-from typing import Optional, Dict, Tuple
+
 import json
+import os
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 
 class ModelManager:
@@ -15,33 +16,38 @@ class ModelManager:
 
     # Popular small models for different purposes
     RECOMMENDED_MODELS = {
-        'llama-cpp': {
-            'mistral-7b-instruct': {
-                'url': 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/Mistral-7B-Instruct-v0.2.Q4_K_M.gguf',
-                'size': '4.37GB',
-                'description': 'Fast, good quality, recommended for CPU'
+        "llama-cpp": {
+            "mistral-7b-instruct": {
+                "url": "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/Mistral-7B-Instruct-v0.2.Q4_K_M.gguf",
+                "size": "4.37GB",
+                "description": "Fast, good quality, recommended for CPU",
             },
-            'neural-chat-7b': {
-                'url': 'https://huggingface.co/TheBloke/neural-chat-7B-v3-3-GGUF/resolve/main/neural-chat-7B-v3-3.Q4_K_M.gguf',
-                'size': '4.29GB',
-                'description': 'Optimized for chat'
+            "neural-chat-7b": {
+                "url": "https://huggingface.co/TheBloke/neural-chat-7B-v3-3-GGUF/resolve/main/neural-chat-7B-v3-3.Q4_K_M.gguf",
+                "size": "4.29GB",
+                "description": "Optimized for chat",
             },
-            'openchat-3.5': {
-                'url': 'https://huggingface.co/TheBloke/OpenChat-3.5-GGUF/resolve/main/openchat-3.5.Q4_K_M.gguf',
-                'size': '4.16GB',
-                'description': 'Good balance of speed and quality'
+            "openchat-3.5": {
+                "url": "https://huggingface.co/TheBloke/OpenChat-3.5-GGUF/resolve/main/openchat-3.5.Q4_K_M.gguf",
+                "size": "4.16GB",
+                "description": "Good balance of speed and quality",
+            },
+            "llama-3.2-3b.Q4_K_M.gguf": {
+                "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-IQ3_M.gguf",
+                "size": "4.16GB",
+                "description": "Good balance of speed and quality",
             },
         },
-        'mlx': {
-            'mistral-7b': {
-                'description': 'Auto-downloads via mlx-lm',
-                'command': 'mlx_lm.generate'
+        "mlx": {
+            "mistral-7b": {
+                "description": "Auto-downloads via mlx-lm",
+                "command": "mlx_lm.generate",
             },
-            'llama-2-7b': {
-                'description': 'Auto-downloads via mlx-lm',
-                'command': 'mlx_lm.generate'
-            }
-        }
+            "llama-2-7b": {
+                "description": "Auto-downloads via mlx-lm",
+                "command": "mlx_lm.generate",
+            },
+        },
     }
 
     def __init__(self):
@@ -67,8 +73,9 @@ class ModelManager:
         model_path = self.models_dir / f"{model_name}.gguf"
         return model_path.exists()
 
-    def download_model(self, model_key: str, backend: str = 'llama-cpp',
-                       progress_callback=None) -> Optional[str]:
+    def download_model(
+        self, model_key: str, backend: str = "llama-cpp", progress_callback=None
+    ) -> Optional[str]:
         """
         Download a model.
 
@@ -90,13 +97,13 @@ class ModelManager:
         model_info = models[model_key]
 
         # For MLX, models are auto-downloaded by mlx-lm
-        if backend == 'mlx':
+        if backend == "mlx":
             print(f"✓ MLX will auto-download '{model_key}' on first use")
             return None
 
         # For llama-cpp, download GGUF file
-        if backend == 'llama-cpp':
-            url = model_info.get('url')
+        if backend == "llama-cpp":
+            url = model_info.get("url")
             if not url:
                 print(f"❌ No download URL for {model_key}")
                 return None
@@ -118,8 +125,9 @@ class ModelManager:
 
         return None
 
-    def _download_file(self, url: str, destination: Path,
-                      progress_callback=None) -> Optional[str]:
+    def _download_file(
+        self, url: str, destination: Path, progress_callback=None
+    ) -> Optional[str]:
         """
         Download a file with progress reporting.
 
@@ -134,13 +142,13 @@ class ModelManager:
         try:
             # Open URL
             response = urllib.request.urlopen(url, timeout=30)
-            total_size = int(response.headers.get('content-length', 0))
+            total_size = int(response.headers.get("content-length", 0))
 
             # Download with progress
             chunk_size = 8192  # 8KB chunks
             downloaded = 0
 
-            with open(destination, 'wb') as f:
+            with open(destination, "wb") as f:
                 while True:
                     chunk = response.read(chunk_size)
                     if not chunk:
@@ -157,8 +165,8 @@ class ModelManager:
                         percent = (downloaded / total_size) * 100
                         bar_len = 30
                         filled = int(bar_len * downloaded / total_size)
-                        bar = '█' * filled + '░' * (bar_len - filled)
-                        print(f'\r  [{bar}] {percent:.1f}%', end='', flush=True)
+                        bar = "█" * filled + "░" * (bar_len - filled)
+                        print(f"\r  [{bar}] {percent:.1f}%", end="", flush=True)
 
             print()  # New line after progress bar
             print(f"✓ Downloaded to: {destination}")
@@ -180,15 +188,15 @@ class ModelManager:
 
     def suggest_model(self, backend: str) -> str:
         """Suggest a model for the given backend."""
-        if backend == 'llama-cpp':
-            return 'mistral-7b-instruct'
-        elif backend == 'mlx':
-            return 'mistral-7b'
-        return ''
+        if backend == "llama-cpp":
+            return "llama-3.2-3b.Q4_K_M.gguf"
+        elif backend == "mlx":
+            return "mistral-7b"
+        return ""
 
     def print_setup_instructions(self, backend: str):
         """Print setup instructions for a backend."""
-        if backend == 'llama-cpp':
+        if backend == "llama-cpp":
             print("\n" + "=" * 60)
             print("📦 LLM Setup for llama-cpp-python")
             print("=" * 60)
@@ -200,12 +208,12 @@ class ModelManager:
             print("      hyperthymesia agent 'your question'")
             print("      (will prompt to download)\n")
             print("   Option B - Manual:")
-            models = self.get_available_models('llama-cpp')
+            models = self.get_available_models("llama-cpp")
             for key, info in list(models.items())[:3]:
                 print(f"      - {key}: {info['description']} ({info['size']})")
             print("\n3. Models are cached in: ~/.hyperthymesia/models/\n")
 
-        elif backend == 'mlx':
+        elif backend == "mlx":
             print("\n" + "=" * 60)
             print("🍎 LLM Setup for MLX (Apple Silicon)")
             print("=" * 60)
@@ -216,11 +224,11 @@ class ModelManager:
             print("   Default: mistral-7b\n")
 
             print("3. Supported models:")
-            for model_key in ['mistral-7b', 'llama-2-7b']:
+            for model_key in ["mistral-7b", "llama-2-7b"]:
                 print(f"   - {model_key}")
             print()
 
-        elif backend == 'ollama':
+        elif backend == "ollama":
             print("\n" + "=" * 60)
             print("🦙 LLM Setup for Ollama")
             print("=" * 60)

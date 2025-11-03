@@ -6,6 +6,10 @@ __pycache__
 
 # Real codebase testing - downloaded projects (too large for repo)
 tests/data/codebases/
+venv/
+DS_Store
+hyperthymesia.egg-info/
+
 
 # Database testing
 tests/data/*.db

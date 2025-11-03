@@ -37,9 +37,9 @@ class HyperthymesiaShell:
             print_info("ℹ️  Local LLM not available (Ollama not running)")
         
         self.db = Database()
-        
+
         print()
-        print_success("Ready! Type 'help' for commands.\n")
+        print_success("Ready! Just ask your questions naturally or type 'help' for commands.\n")
     
     def run(self):
         """Run the interactive shell."""
@@ -65,54 +65,64 @@ class HyperthymesiaShell:
         parts = user_input.split(maxsplit=1)
         command = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
-        
-        # Commands
-        if command in ['exit', 'quit', 'q']:
+
+        # Handle exit/quit (with or without /)
+        if command in ['exit', 'quit', 'q', '/exit', '/quit', '/q']:
             print_info("Goodbye! 👋")
             self.running = False
-        
-        elif command == 'help':
+
+        # Handle help (with or without /)
+        elif command in ['help', '/help']:
             self.show_help()
-        
-        elif command == 'search' or command == 's':
-            if not args:
-                print_error("Usage: search <query>")
-                return
-            self.cmd_search(args)
-        
-        elif command == 'ask' or command == 'a':
-            if not args:
-                print_error("Usage: ask <question>")
-                return
-            self.cmd_ask(args)
-        
-        elif command == 'index':
-            self.cmd_index(args)
-        
-        elif command == 'stats':
-            self.cmd_stats()
-        
-        elif command == 'clear' or command == 'cls':
+
+        # Handle clear (with or without /)
+        elif command in ['clear', 'cls', '/clear', '/cls']:
             import os
             os.system('clear' if os.name != 'nt' else 'cls')
-        
+
+        # Handle slash commands
+        elif command.startswith('/'):
+            # Remove the / for processing
+            cmd_name = command[1:]
+
+            if cmd_name == 'search' or cmd_name == 's':
+                if not args:
+                    print_error("Usage: /search <query>")
+                    return
+                self.cmd_search(args)
+
+            elif cmd_name == 'index':
+                self.cmd_index(args)
+
+            elif cmd_name == 'stats':
+                self.cmd_stats()
+
+            else:
+                print_error(f"Unknown command: {command}")
+                print_info("Type 'help' for available commands")
+
+        # Treat everything else as a natural question/ask command
         else:
-            print_error(f"Unknown command: {command}")
-            print_info("Type 'help' for available commands")
+            # The entire input is the question
+            self.cmd_ask(user_input)
     
     def show_help(self):
         """Show help message."""
         print()
         print_success("Available Commands:\n")
-        print("  search <query>     Search for files (alias: s)")
-        print("  ask <question>     Ask a question (alias: a)")
-        print("  index add <path>   Index a directory")
-        print("  index list         List indexed locations")
-        print("  stats              Show index statistics")
-        print("  clear              Clear screen (alias: cls)")
-        print("  help               Show this help")
-        print("  exit               Exit shell (aliases: quit, q)")
-        print()
+        print("  Natural Questions (Just Ask!):")
+        print("    <question>       Any natural language question")
+        print("    Example: 'what does this function do?'\n")
+        print("  Indexing (Requires /):")
+        print("    /index add <path>   Index a directory")
+        print("    /index list         List indexed locations\n")
+        print("  Searching (Optional /):")
+        print("    /search <query>     Search for files\n")
+        print("  Other Commands (With or Without /):")
+        print("    /stats or stats             Show index statistics")
+        print("    /help or help               Show this help")
+        print("    /clear or clear             Clear screen")
+        print("    /exit or exit, /quit or quit, /q or q   Exit shell\n")
     
     def cmd_search(self, query: str):
         """Execute search command."""
