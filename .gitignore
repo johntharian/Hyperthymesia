@@ -1,6 +1,7 @@
 client_secret_802737267375-9nmqa2tftr05koivc04i3786pn8vf8d5.apps.googleusercontent.com.json
 
 __pycache__
+.pytest_cache
 *.pyc
 .env
 
